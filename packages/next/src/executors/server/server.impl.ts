@@ -1,14 +1,7 @@
-import {
-  ExecutorContext,
-  parseTargetString,
-  readTargetOptions,
-} from '@nx/devkit';
-import { join, resolve } from 'path';
+import { ExecutorContext, parseTargetString, readTargetOptions } from '@nx/devkit';
+import { resolve } from 'path';
 
-import {
-  NextBuildBuilderOptions,
-  NextServeBuilderOptions,
-} from '../../utils/types';
+import { NextBuildBuilderOptions, NextServeBuilderOptions } from '../../utils/types';
 import { fork } from 'child_process';
 import customServer from './custom-server.impl';
 import { createCliOptions } from '../../utils/create-cli-options';
@@ -39,8 +32,8 @@ export default async function* serveExecutor(
   (process.env as any).NODE_ENV = process.env.NODE_ENV
     ? process.env.NODE_ENV
     : options.dev
-    ? 'development'
-    : 'production';
+      ? 'development'
+      : 'production';
 
   // Setting port that the custom server should use.
   process.env.PORT = options.port ? `${options.port}` : process.env.PORT;
@@ -54,16 +47,18 @@ export default async function* serveExecutor(
 
   const mode = options.dev ? 'dev' : 'start';
   const turbo = options.turbo && options.dev ? '--turbo' : '';
-  const experimentalHttps =
-    options.experimentalHttps && options.dev ? '--experimental-https' : '';
   const nextBin = require.resolve('next/dist/bin/next');
 
   yield* createAsyncIterable<{ success: boolean; baseUrl: string }>(
     async ({ done, next, error }) => {
-      const server = fork(nextBin, [mode, ...args, turbo, experimentalHttps], {
-        cwd: options.dev ? projectRoot : nextDir,
-        stdio: 'inherit',
-      });
+      const server = fork(
+        nextBin,
+        [mode, ...args, turbo, ...getExperimentalHttpsFlags(options)],
+        {
+          cwd: options.dev ? projectRoot : nextDir,
+          stdio: 'inherit'
+        }
+      );
 
       server.once('exit', (code) => {
         if (code === 0) {
@@ -87,8 +82,21 @@ export default async function* serveExecutor(
 
       next({
         success: true,
-        baseUrl: `http://${options.hostname ?? 'localhost'}:${options.port}`,
+        baseUrl: `http://${options.hostname ?? 'localhost'}:${options.port}`
       });
     }
   );
+}
+
+function getExperimentalHttpsFlags(options: NextServeBuilderOptions): string[] {
+  if (!options.dev) return [];
+  const flags: string[] = [];
+  if (options.experimentalHttps) flags.push('--experimental-https');
+  if (options.experimentalHttpsKey)
+    flags.push(`--experimental-https-key=${options.experimentalHttpsKey}`);
+  if (options.experimentalHttpsCert)
+    flags.push(`--experimental-https-cert=${options.experimentalHttpsCert}`);
+  if (options.experimentalHttpsCa)
+    flags.push(`--experimental-https-ca=${options.experimentalHttpsCa}`);
+  return flags;
 }
